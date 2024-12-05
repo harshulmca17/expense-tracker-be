@@ -17,6 +17,8 @@ fastify.register(require('./routes/users'))
 
 fastify.register(require('./routes/expenses'))
 
+fastify.register(require('./routes/smtp'))
+
 // Run the server
 const start = async () => {
   try {
