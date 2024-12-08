@@ -24,7 +24,7 @@ fastify.register(require('./routes/users'))
 fastify.register(require('./routes/expenses'))
 
 fastify.register(require('./routes/smtp'))
-fastify.get('/test-redis', async (request, reply) => {
+fastify.get('/api/test-redis', async (request, reply) => {
   const { redis } = fastify;
   
   // Example: Increment a counter
