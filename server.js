@@ -1,5 +1,11 @@
 require('dotenv').config()
 const fastify = require('fastify')({ logger: true })
+fastify.register(require('@fastify/redis'), {
+  host: process.env.REDIS_HOST || '192.168.0.128',
+  port: process.env.REDIS_PORT || 6379,
+  // password: process.env.REDIS_PASSWORD,  // If using Redis auth
+  closeClient: true
+});
 
 fastify.register(require('@fastify/cors'), {
   origin: ['*'],
@@ -18,7 +24,14 @@ fastify.register(require('./routes/users'))
 fastify.register(require('./routes/expenses'))
 
 fastify.register(require('./routes/smtp'))
-
+fastify.get('/test-redis', async (request, reply) => {
+  const { redis } = fastify;
+  
+  // Example: Increment a counter
+  const count = await redis.incr('visits');
+  
+  return { count };
+});
 // Run the server
 const start = async () => {
   try {
