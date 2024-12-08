@@ -2,6 +2,9 @@
 const FormData = require('form-data')
 const Mailgun = require('mailgun.js')
 const crypto = require('crypto');
+const { Resend } = require('resend');
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 
 function generateOTP() {
@@ -15,6 +18,27 @@ const mg = mailgun.client({
 })
 const otpStore = new Map();
 
+
+async function sendUsingMailGun(domain, from, to, subject, text, html) {
+  const result = await mg.messages.create(domain, {
+    from,
+    to: [to],
+    subject,
+    text,
+    html
+  });
+  return result;
+}
+async function sendUsingResend(domain, from, to, subject, text, html) {
+  const result = await resend.emails.send({
+    from,
+    to: [to],
+    subject,
+
+    html
+  });
+  return result;
+}
 async function routes(fastify, options) {
   // Get all users
   fastify.post('/api/send-email', async (request, reply) => {
@@ -63,20 +87,16 @@ async function routes(fastify, options) {
       });
 
       // Send email using Mailgun
-      const result = await mg.messages.create(process.env.MAILGUN_DOMAIN, {
-        from: `Nephilim Pi <${process.env.MAILGUN_SENDER}>`,
-        to: [email],
-        subject: 'Your Login OTP',
-        text: `Your OTP for login is: ${otp}\n\nThis OTP will expire in 5 minutes.`,
-        html: `
-          <h2>Your Login OTP</h2>
-          <p>Use the following OTP to complete your login:</p>
-          <h1 style="font-size: 36px; letter-spacing: 5px; color: #4a5568;">${otp}</h1>
-          <p>This OTP will expire in 5 minutes.</p>
-          <p>If you didn't request this OTP, please ignore this email.</p>
-        `
-      });
-
+      const result = await sendUsingResend(process.env.RESEND_DOMAIN,
+        `Nephilim Pi <${process.env.RESEND_SENDER}>`,
+        email,
+        'Your Login OTP',
+        `Your OTP for login is: ${otp}\n\nThis OTP will expire in 5 minutes.`,
+        getEmailOtpTemplate(otp)
+      );
+      if(result?.error && result.error?.message){
+        throw new Error(result.error.message)
+      }
       // Clean up expired OTPs
       for (const [storedEmail, data] of otpStore) {
         if (Date.now() - data.timestamp > 5 * 60 * 1000) {
@@ -87,6 +107,7 @@ async function routes(fastify, options) {
       reply.send({
         success: true,
         messageId: result.id,
+        result,
         message: 'OTP sent successfully'
       });
 
@@ -98,7 +119,7 @@ async function routes(fastify, options) {
 
       reply.status(500).send({
         success: false,
-        error: 'Failed to send OTP'
+        error: `Failed to send OTP : ${error}`
       });
     }
   });
@@ -162,3 +183,14 @@ async function routes(fastify, options) {
 }
 
 module.exports = routes
+
+
+function getEmailOtpTemplate(otp) {
+  return `
+        <h2>Your Login OTP</h2>
+        <p>Use the following OTP to complete your login:</p>
+        <h1 style="font-size: 36px; letter-spacing: 5px; color: #4a5568;">${otp}</h1>
+        <p>This OTP will expire in 5 minutes.</p>
+        <p>If you didn't request this OTP, please ignore this email.</p>
+      `
+}
